@@ -5,6 +5,7 @@
 #import <document/OakDocument.h>
 #import <document/OakDocumentController.h>
 #import <OakAppKit/NSAlert Additions.h>
+#import <OakAppKit/NSImage Additions.h>
 #import <OakAppKit/NSMenuItem Additions.h>
 #import <OakAppKit/OakAppKit.h>
 #import <OakAppKit/OakFileIconImage.h>
@@ -81,7 +82,7 @@ static void show_command_error (std::string const& message, oak::uuid_t const& u
 }
 @end
 
-@interface DocumentWindowController () <NSWindowDelegate, OakTabBarViewDelegate, OakTabBarViewDataSource, OakTextViewDelegate, OakFileBrowserDelegate, QLPreviewPanelDelegate, QLPreviewPanelDataSource>
+@interface DocumentWindowController () <NSWindowDelegate, NSTouchBarDelegate, OakTabBarViewDelegate, OakTabBarViewDataSource, OakTextViewDelegate, OakFileBrowserDelegate, QLPreviewPanelDelegate, QLPreviewPanelDataSource>
 {
 	OBJC_WATCH_LEAKS(DocumentWindowController);
 
@@ -114,6 +115,8 @@ static void show_command_error (std::string const& message, oak::uuid_t const& u
 @property (nonatomic) NSString*                   projectPath;
 
 @property (nonatomic) NSString*                   documentPath;
+
+@property (nonatomic) NSSegmentedControl*	        touchBarTabSegmentedControl;
 
 @property (nonatomic) NSArray*                    urlArrayForQuickLook;
 @property (nonatomic) NSArray<Bundle*>*           bundlesAlreadySuggested;
@@ -1257,6 +1260,13 @@ static NSArray* const kObservedKeyPaths = @[ @"arrayController.arrangedObjects.p
 	[OakDocumentController.sharedInstance showDocument:aDocument inProject:self.identifier bringToFront:YES];
 }
 
+- (IBAction)openFavorites:(id)sender
+{
+	if ([[NSApplication.sharedApplication delegate] respondsToSelector:@selector(openFavorites:)]) {
+		[[NSApplication.sharedApplication delegate] performSelector:@selector(openFavorites:) withObject:sender];
+	}
+}
+
 // ================
 // = Window Title =
 // ================
@@ -1731,6 +1741,18 @@ static NSArray* const kObservedKeyPaths = @[ @"arrayController.arrangedObjects.p
 - (IBAction)selectPreviousTab:(id)sender        { self.selectedTabIndex = (_selectedTabIndex + _documents.count - 1) % _documents.count; [self openAndSelectDocument:_documents[_selectedTabIndex]]; }
 - (IBAction)takeSelectedTabIndexFrom:(id)sender { self.selectedTabIndex = [sender tag];                                                  [self openAndSelectDocument:_documents[_selectedTabIndex]]; }
 
+- (IBAction)navigateTabs:(NSSegmentedControl *)control
+{
+	switch (control.selectedSegment) {
+	case 0:
+		[self selectPreviousTab:control];
+		break;
+	case 1:
+		[self selectNextTab:control];
+		break;
+	}
+}
+
 // ==================
 // = OakFileBrowser =
 // ==================
@@ -2016,6 +2038,13 @@ static NSArray* const kObservedKeyPaths = @[ @"arrayController.arrangedObjects.p
 	[find showWindow:self];
 }
 
+- (IBAction)orderFrontFindPanelForProject:(id)sender
+{
+	Find* find = [self prepareAndReturnFindPanel];
+	find.searchTarget = FFSearchTargetProject;
+	[find showWindow:self];
+}
+
 - (IBAction)orderFrontRunCommandWindow:(id)sender
 {
 	OakRunCommandWindowController* runCommand = [OakRunCommandWindowController sharedInstance];
@@ -2282,6 +2311,82 @@ static NSArray* const kObservedKeyPaths = @[ @"arrayController.arrangedObjects.p
 	}
 
 	return active;
+}
+
+// =============
+// = Touch Bar =
+// =============
+
+static NSTouchBarItemIdentifier TouchBarTabNavigationTabNavigationIdentifier = @"com.textmate.touch-bar.tab-navigation";
+static NSTouchBarItemIdentifier TouchBarNewTabItemIdentifier = @"com.textmate.touch-bar.new-tab";
+static NSTouchBarItemIdentifier TouchBarQuickOpenItemIdentifier = @"com.textmate.touch-bar.quick-open";
+static NSTouchBarItemIdentifier TouchBarFindItemIdentifier = @"com.textmate.touch-bar.find";
+static NSTouchBarItemIdentifier TouchBarFavoritesItemIdentifier = @"com.textmate.touch-bar.favorites";
+
+- (NSTouchBar *)makeTouchBar
+{
+	NSTouchBar *bar = [[NSTouchBar alloc] init];
+	bar.delegate = self;
+	bar.defaultItemIdentifiers = @[
+		TouchBarTabNavigationTabNavigationIdentifier,
+		TouchBarNewTabItemIdentifier,
+		TouchBarQuickOpenItemIdentifier,
+		NSTouchBarItemIdentifierFlexibleSpace,
+		TouchBarFindItemIdentifier,
+		TouchBarFavoritesItemIdentifier,
+	];
+	return bar;
+}
+
+- (void)updateTouchBarButtons
+{
+	if (self.touchBarTabSegmentedControl != nil) {
+		self.touchBarTabSegmentedControl.enabled = (_documents.count > 1);
+	}
+}
+
+- (nullable NSTouchBarItem *)touchBar:(NSTouchBar *)touchBar makeItemForIdentifier:(NSTouchBarItemIdentifier)identifier
+{
+	if ([identifier isEqualToString:TouchBarTabNavigationTabNavigationIdentifier]) {
+		NSCustomTouchBarItem *navigationItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:identifier];
+		navigationItem.view = [self touchBar:touchBar tabNavigationSegmentedControlForIdentifier:identifier];
+		return navigationItem;
+	}
+	if ([identifier isEqualToString:TouchBarNewTabItemIdentifier]) {
+		NSCustomTouchBarItem *globalItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:identifier];
+		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:@"TouchBarNewTab" isTemplate:true] target:self action:@selector(newDocumentInTab:)];
+		globalItem.visibilityPriority = NSTouchBarItemPriorityNormal;
+		return globalItem;
+	}
+	if ([identifier isEqualToString:TouchBarQuickOpenItemIdentifier]) {
+		NSCustomTouchBarItem *globalItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:identifier];
+		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:@"TouchBarQuickOpen" isTemplate:true] target:self action:@selector(goToFile:)];
+		globalItem.visibilityPriority = NSTouchBarItemPriorityNormal;
+		return globalItem;
+	}
+	if ([identifier isEqualToString:TouchBarFindItemIdentifier]) {
+		NSCustomTouchBarItem *globalItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:identifier];
+		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:NSImageNameTouchBarSearchTemplate] target:self action:@selector(orderFrontFindPanelForProject:)];
+		globalItem.visibilityPriority = NSTouchBarItemPriorityNormal;
+		return globalItem;
+	}
+	if ([identifier isEqualToString:TouchBarFavoritesItemIdentifier]) {
+		NSCustomTouchBarItem *globalItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:identifier];
+		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:NSImageNameTouchBarBookmarksTemplate] target:self action:@selector(openFavorites:)];
+		globalItem.visibilityPriority = NSTouchBarItemPriorityNormal;
+		return globalItem;
+	}
+	return nil;
+}
+
+- (NSSegmentedControl *)touchBar:(NSTouchBar *)touchBar tabNavigationSegmentedControlForIdentifier:(NSTouchBarItemIdentifier)identifier
+{
+	if (self.touchBarTabSegmentedControl == nil) {
+		self.touchBarTabSegmentedControl = [NSSegmentedControl segmentedControlWithImages:@[[NSImage imageNamed:NSImageNameTouchBarGoBackTemplate], [NSImage imageNamed:NSImageNameTouchBarGoForwardTemplate]] trackingMode:NSSegmentSwitchTrackingMomentary target:self action:@selector(navigateTabs:)];
+		self.touchBarTabSegmentedControl.enabled = (_documents.count > 1);
+		self.touchBarTabSegmentedControl.segmentStyle = NSSegmentStyleSeparated;
+	}
+	return self.touchBarTabSegmentedControl;
 }
 
 // =============
