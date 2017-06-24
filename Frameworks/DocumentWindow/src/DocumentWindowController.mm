@@ -5,7 +5,6 @@
 #import <document/OakDocument.h>
 #import <document/OakDocumentController.h>
 #import <OakAppKit/NSAlert Additions.h>
-#import <OakAppKit/NSImage Additions.h>
 #import <OakAppKit/NSMenuItem Additions.h>
 #import <OakAppKit/OakAppKit.h>
 #import <OakAppKit/OakFileIconImage.h>
@@ -2354,13 +2353,13 @@ static NSTouchBarItemIdentifier TouchBarFavoritesItemIdentifier = @"com.textmate
 	}
 	if ([identifier isEqualToString:TouchBarNewTabItemIdentifier]) {
 		NSCustomTouchBarItem *globalItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:identifier];
-		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:@"TouchBarNewTab" isTemplate:true] target:self action:@selector(newDocumentInTab:)];
+		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:@"TouchBarNewTabTemplate"] target:self action:@selector(newDocumentInTab:)];
 		globalItem.visibilityPriority = NSTouchBarItemPriorityNormal;
 		return globalItem;
 	}
 	if ([identifier isEqualToString:TouchBarQuickOpenItemIdentifier]) {
 		NSCustomTouchBarItem *globalItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:identifier];
-		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:@"TouchBarQuickOpen" isTemplate:true] target:self action:@selector(goToFile:)];
+		globalItem.view = [NSButton buttonWithImage:[NSImage imageNamed:@"TouchBarQuickOpenTemplate"] target:self action:@selector(goToFile:)];
 		globalItem.visibilityPriority = NSTouchBarItemPriorityNormal;
 		return globalItem;
 	}
